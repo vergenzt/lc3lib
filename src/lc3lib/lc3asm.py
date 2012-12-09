@@ -53,16 +53,20 @@ class ObjectFile(object):
                     break
                 addr, size = struct.unpack('>HH', data)
                 # read the data
+                rng = Range([0] * size)
                 for i in xrange(size):
                     data = f.read(2)
                     if not data:
-                        raise RuntimeError("Binary file does not follow format")
-                    self.mem[addr + i] = struct.unpack('>H', data)[0]
+                        msg = "Object file block %d does not match header size"
+                        raise RuntimeError(msg % len(self.ranges))
+                    rng[i] = struct.unpack('>H', data)[0]
+                # add it to this ObjectFile's ranges
+                self.ranges[addr] = rng
 
 
 class Range(array.array):
     """
     A range of assembled instructions within LC-3 memory.
     """
-    def __init__(self, initializer=None):
-        array.array.__init__(self, 'H', initializer)
+    def __new__(self, initializer=None):
+        return super(Range, self).__new__(self, 'H', initializer)
