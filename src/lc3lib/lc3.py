@@ -17,7 +17,38 @@ class LC3Machine(object):
         self.reg = array.array('H', itertools.repeat(0, 0x8))
         self.cc = 'z'
 
-    def update_cc(self, val):
+    def execute(self):
+        """Execute one instruction."""
+        # get the instruction
+        ir = self.mem[self.pc]
+        self.pc += 1
+        # set up the environment
+        env = self._get_instruction_env(ir)
+        # call the instruction
+        opcode = (ir & 0xF000) >> 12
+        self.INSTR_SET[opcode](env)
+
+    def _get_instruction_env(self, ir):
+        """Fill an environment object for the instruction variables."""
+        bits = lambda l, h: (ir >> l) & ((1 << (h - l)) - 1)
+        bit = lambda n: (ir >> n) & 1
+        env = object()
+        env.DR = bits(9, 11)
+        env.SR = bits(9, 11)
+        env.SR1 = bits(6, 8)
+        env.BaseR = bits(6, 8)
+        env.SR2 = bits(0, 2)
+        env.bit5 = bit(5)
+        env.imm5 = bits(0, 4)
+        env.PCoffset9 = bits(0, 8)
+        env.PCoffset11 = bits(0, 10)
+        env.bit11 = bit(11)
+        env.offset6 = bits(0, 5)
+        env.trapvect8 = bits(0, 7)
+        env.cc = ''.join(['pzn'[i - 9] for i in range(11, 8, -1) if bit(i)])
+        return env
+
+    def _update_cc(self, val):
         """Update the condition codes based on the given value."""
         if val == 0:
             self.cc = 'z'
@@ -25,13 +56,6 @@ class LC3Machine(object):
             self.cc = 'n'
         elif val > 0:
             self.cc = 'p'
-
-    def execute(self):
-        """Execute one instruction."""
-        # get the instruction
-        # set up the environment
-        # call the function
-        pass
 
     INSTR_SET = {
         0x1: LC3Machine.ADD,
@@ -75,14 +99,14 @@ class LC3Machine(object):
             self.reg[env.DR] = self.reg[env.SR1] + env.imm5
         else:
             self.reg[env.DR] = self.reg[env.SR1] + self.reg[env.SR2]
-        self.update_cc(self.reg[env.DR])
+        self._update_cc(self.reg[env.DR])
 
     def AND(self, env):
         if env.bit5:
             self.reg[env.DR] = self.reg[env.SR1] & env.imm5
         else:
             self.reg[env.DR] = self.reg[env.SR1] & self.reg[env.SR2]
-        self.update_cc(self.reg[env.DR])
+        self._update_cc(self.reg[env.DR])
 
     def BR(self, env):
         if self.cc in env.cc:
@@ -101,23 +125,23 @@ class LC3Machine(object):
 
     def LD(self, env):
         self.reg[env.DR] = self.mem[self.pc + env.PCoffset9]
-        self.update_cc(self.reg[env.DR])
+        self._update_cc(self.reg[env.DR])
 
     def LDI(self, env):
         self.reg[env.DR] = self.mem[self.mem[self.pc + env.PCoffset9]]
-        self.update_cc(self.reg[env.DR])
+        self._update_cc(self.reg[env.DR])
 
     def LDR(self, env):
         self.reg[env.DR] = self.mem[self.reg[env.BaseR] + env.offset6]
-        self.update_cc(self.reg[env.DR])
+        self._update_cc(self.reg[env.DR])
 
     def LEA(self, env):
         self.reg[env.DR] = self.pc + env.PCoffset9
-        self.update_cc(self.reg[env.DR])
+        self._update_cc(self.reg[env.DR])
 
     def NOT(self, env):
         self.reg[env.DR] = (~self.reg[env.SR] & 0xFFFF)
-        self.update_cc(self.reg[env.DR])
+        self._update_cc(self.reg[env.DR])
 
     def ST(self, env):
         self.mem[self.pc + env.PCoffset9] = self.reg[env.SR]
