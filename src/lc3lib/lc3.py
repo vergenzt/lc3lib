@@ -3,6 +3,7 @@
 This module defines an LC3 machine class for simulating the LC-3 environment.
 """
 
+import lc3instr
 import array
 import itertools
 
@@ -26,7 +27,7 @@ class LC3Machine(object):
         env = self._get_instruction_env(ir)
         # call the instruction
         opcode = (ir & 0xF000) >> 12
-        self.INSTR_SET[opcode](env)
+        self.INSTR_SET[opcode](self, env)
 
     def _get_instruction_env(self, ir):
         """Fill an environment object for the instruction variables."""
@@ -48,7 +49,7 @@ class LC3Machine(object):
         env.cc = ''.join(['pzn'[i - 9] for i in range(11, 8, -1) if bit(i)])
         return env
 
-    def _update_cc(self, val):
+    def set_cc(self, val):
         """Update the condition codes based on the given value."""
         if val == 0:
             self.cc = 'z'
@@ -58,101 +59,18 @@ class LC3Machine(object):
             self.cc = 'p'
 
     INSTR_SET = {
-        0x1: LC3Machine.ADD,
-        0x5: LC3Machine.AND,
-        0x0: LC3Machine.BR,
-        0xC: LC3Machine.JMP,
-        0x4: LC3Machine.JSR,
-        0x2: LC3Machine.LD,
-        0xA: LC3Machine.LDI,
-        0x6: LC3Machine.LDR,
-        0x9: LC3Machine.NOT,
-        0x3: LC3Machine.ST,
-        0xB: LC3Machine.STI,
-        0x7: LC3Machine.STR,
-        0xF: LC3Machine.TRAP,
+        0x1: lc3instr.ADD,
+        0x5: lc3instr.AND,
+        0x0: lc3instr.BR,
+        0xC: lc3instr.JMP,
+        0x4: lc3instr.JSR,
+        0x2: lc3instr.LD,
+        0xA: lc3instr.LDI,
+        0x6: lc3instr.LDR,
+        0x9: lc3instr.NOT,
+        0x3: lc3instr.ST,
+        0xB: lc3instr.STI,
+        0x7: lc3instr.STR,
+        0xF: lc3instr.TRAP,
     }
-
-    """
-    LC-3 instruction set
-
-    Each of the following functions accept an object env, with the following
-    attributes, where [a:b] means bits a through b, inclusive.
-
-                 DR: [9:11]
-                 SR: [9:11]
-                SR1: [6:8]
-              BaseR: [6:8]
-                SR2: [0:2]
-               bit5: [5]
-               imm5: [0-4]
-          PCoffset9: [0:8]
-         PCoffset11: [0:10]
-              bit11: [11]
-            offset6: [0:5]
-          trapvect8: [0:7]
-                 cc: some subset of 'nzp', depending on bits [9:11]
-    """
-
-    def ADD(self, env):
-        if env.bit5:
-            self.reg[env.DR] = self.reg[env.SR1] + env.imm5
-        else:
-            self.reg[env.DR] = self.reg[env.SR1] + self.reg[env.SR2]
-        self._update_cc(self.reg[env.DR])
-
-    def AND(self, env):
-        if env.bit5:
-            self.reg[env.DR] = self.reg[env.SR1] & env.imm5
-        else:
-            self.reg[env.DR] = self.reg[env.SR1] & self.reg[env.SR2]
-        self._update_cc(self.reg[env.DR])
-
-    def BR(self, env):
-        if self.cc in env.cc:
-            self.pc += env.PCoffset9
-
-    def JMP(self, env):
-        self.pc = env.BaseR
-
-    def JSR(self, env):
-        temp = self.pc
-        if env.bit11:
-            self.pc += env.PCoffset11
-        else:
-            self.pc = env.BaseR
-        self.reg[7] = temp
-
-    def LD(self, env):
-        self.reg[env.DR] = self.mem[self.pc + env.PCoffset9]
-        self._update_cc(self.reg[env.DR])
-
-    def LDI(self, env):
-        self.reg[env.DR] = self.mem[self.mem[self.pc + env.PCoffset9]]
-        self._update_cc(self.reg[env.DR])
-
-    def LDR(self, env):
-        self.reg[env.DR] = self.mem[self.reg[env.BaseR] + env.offset6]
-        self._update_cc(self.reg[env.DR])
-
-    def LEA(self, env):
-        self.reg[env.DR] = self.pc + env.PCoffset9
-        self._update_cc(self.reg[env.DR])
-
-    def NOT(self, env):
-        self.reg[env.DR] = (~self.reg[env.SR] & 0xFFFF)
-        self._update_cc(self.reg[env.DR])
-
-    def ST(self, env):
-        self.mem[self.pc + env.PCoffset9] = self.reg[env.SR]
-
-    def STI(self, env):
-        self.mem[self.mem[self.pc + env.PCoffset9]] = self.reg[env.SR]
-
-    def STR(self, env):
-        self.mem[self.reg[env.BaseR] + env.offset6] = self.reg[env.SR]
-
-    def TRAP(self, env):
-        self.reg[7] = self.pc
-        self.pc = self.mem[env.trapvect8]
 
